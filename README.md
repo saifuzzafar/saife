@@ -33,20 +33,70 @@ SAIFE autonomously scans LLM chatbot applications for security vulnerabilities u
 
 ## Quick Start Commands
 
-### 1. Web Dashboard (Next.js)
+> **Prerequisites:** Make sure [Ollama](https://ollama.ai/download) is installed and running before starting any scan.
+
+### Step 1 — Install & Start Ollama
+
+```bash
+# 1. Download and install Ollama from https://ollama.ai/download
+
+# 2. Pull the required model (one-time, ~4.7 GB download)
+ollama pull llama3.1
+
+# 3. Start Ollama (runs at http://localhost:11434)
+ollama serve
+```
+
+> On macOS/Windows, Ollama may start automatically after installation. Verify it's running:
+> ```bash
+> curl http://localhost:11434/api/tags
+> ```
+
+---
+
+### Step 2 — Install Python Dependencies
+
+```bash
+# From the capstone/saife/ directory
+cd capstone/saife
+
+# Install all Python dependencies using uv
+uv sync
+```
+
+---
+
+### Step 3 — Run via Web Dashboard (Recommended)
+
+The dashboard spawns the Python backend automatically — no separate backend process needed.
+
 ```bash
 cd dashboard
+npm install      # first time only
 npm run dev
 ```
-Open `http://localhost:3000` to access the SAIFE Premium Web Dashboard. You can boot the test targets directly from the UI.
 
-### 2. Manual CLI Commands
+Open `http://localhost:3000`. From the UI you can:
+- **Start/stop test bots** (ports 9001, 9002, 9003) directly with one click
+- **Run scans** against any target URL
+- **View live results** streamed in real time
+
+> **How it works:** The Next.js API layer (`/api/scan`) spawns `cli_json.py` as a subprocess using the `.venv` Python interpreter. Ollama must be running at `http://localhost:11434` for the LLM calls to succeed.
+
+![SAIFE Web Dashboard](screenshots/dashboard.png)
+*SAIFE Premium Web Dashboard — real-time scan progress, agent pipeline visualization, and 6 OWASP category status grid*
+
+---
+
+### Step 4 (Alternative) — Manual CLI Commands
+
 If you prefer running components manually from the terminal:
+
 ```bash
-# Start test bots (ports 9001, 9002, 9003)
-uvicorn target.vulnerable_chatbot:app --port 9001 &
-uvicorn target.partial_chatbot:app --port 9002 &
-uvicorn target.secure_chatbot:app --port 9003 &
+# Start test bots (ports 9001, 9002, 9003) — run each in a separate terminal
+uvicorn target.vulnerable_chatbot:app --port 9001
+uvicorn target.partial_chatbot:app --port 9002
+uvicorn target.secure_chatbot:app --port 9003
 
 # Run a Full Scan
 python main.py scan --target http://localhost:9001
@@ -76,19 +126,21 @@ Report saved to: `capstone/saife/assessment_reports/assessment.html`
 
 ## Architecture
 
+> 📊 **Visual Diagram:** View the [Full System Architecture Diagram (SVG)](screenshots/saife_architecture_diagram.svg) or read the in-depth [Technical Architecture Reference](ARCHITECTURE.md).
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    CLI (main.py)                              │
-│        scan | quick | history | eval | mcp                   │
+│                    CLI (main.py)                            │
+│        scan | quick | history | eval | mcp                  │
 └──────────────────────┬──────────────────────────────────────┘
                        │
                        ▼
 ┌─────────────────────────────────────────────────────────────┐
-│           ORCHESTRATOR (engine/orchestrator.py)               │
-│                                                               │
-│  DAG Flow:                                                    │
-│  [Validate] → [Scan ║ Parallel x6] → [Deduplicate]           │
-│           → [RAG Enrich] → [Analyze] → [Score] → [Persist]   │
+│           ORCHESTRATOR (engine/orchestrator.py)             │
+│                                                             │
+│  DAG Flow:                                                  │
+│  [Validate] → [Scan ║ Parallel x6] → [Deduplicate]         │
+│           → [RAG Enrich] → [Analyze] → [Score] → [Persist] │
 └──────────────────────┬──────────────────────────────────────┘
            ┌───────────┼───────────┐
            ▼           ▼           ▼
@@ -98,14 +150,14 @@ Report saved to: `capstone/saife/assessment_reports/assessment.html`
   └──────┬───────┘ └────┬─────┘ └────┬─────┘
          │              │             │
   ┌──────▼──────────────▼─────────────▼──────┐
-  │  Knowledge Agent (RAG) — ChromaDB         │
-  │  OWASP LLM Top 10 → sentence-transformers │
-  └──────────────────────┬────────────────────┘
+  │  Knowledge Agent (RAG) — ChromaDB        │
+  │  OWASP LLM Top 10 → sentence-transformers│
+  └──────────────────────┬───────────────────┘
                          │
-  ┌──────────────────────▼────────────────────┐
-  │  Memory Store + PII Guardrail              │
-  │  SQLite scan_history | PII scrubbing       │
-  └───────────────────────────────────────────┘
+  ┌──────────────────────▼───────────────────┐
+  │  Memory Store + PII Guardrail             │
+  │  SQLite scan_history | PII scrubbing      │
+  └──────────────────────────────────────────┘
 ```
 
 ### Node Inventory
@@ -446,17 +498,30 @@ Use the **✕ Cancel** button to abort mid-scan. This cleanly kills the Python p
 
 If a scan is interrupted without clicking Cancel (e.g. server restart, browser close, network drop), the Python backend process may keep running and compete with Ollama — making all subsequent scans slow.
 
-**Check for zombie processes:**
+**macOS / Linux:**
 ```bash
+# Check for zombie processes
 ps aux | grep cli_json.py | grep -v grep
-```
 
-**Kill all zombie scans:**
-```bash
+# Kill all zombie scans
 pkill -f "cli_json.py"
 ```
 
-Run this command any time scans feel unusually slow. After killing zombies, the next scan should complete at normal speed.
+**Windows (PowerShell):**
+```powershell
+# Check for zombie processes
+Get-Process | Where-Object { $_.CommandLine -like "*cli_json.py*" }
+
+# Kill all zombie scans
+Get-WmiObject Win32_Process | Where-Object { $_.CommandLine -like "*cli_json.py*" } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+```
+
+**Windows (Command Prompt):**
+```cmd
+WMIC PROCESS WHERE "CommandLine LIKE '%cli_json.py%'" CALL TERMINATE
+```
+
+Run this any time scans feel unusually slow. After killing zombies, the next scan should complete at normal speed.
 
 > **Why does this happen?** The dashboard API route (Next.js) spawns a Python subprocess. If the HTTP connection drops before the scan finishes, the subprocess keeps running. The Cancel button prevents this by sending SIGTERM to Python before disconnecting.
 
@@ -488,6 +553,51 @@ ollama pull llama3.1
 | 5 | Pydantic Evals + LLMJudge | ✅ Complete |
 | 6 | OTEL Observability (Logfire) | ✅ Complete |
 | 7 | MCP Server (FastMCP) | ✅ Complete |
+
+---
+
+## Observability — Arize Phoenix
+
+SAIFE integrates with [Arize Phoenix](https://phoenix.arize.com) for real-time tracing of all agent runs, tool calls, LLM latency, and token usage.
+
+### Step 1 — Start Phoenix (no install needed)
+
+Open a new terminal and run:
+
+```bash
+# macOS / Linux
+uvx arize-phoenix serve
+
+# Windows (cmd)
+uvx arize-phoenix serve
+```
+
+Open **http://localhost:6006** to see the Phoenix UI.
+
+### Step 2 — Run a Scan with Tracing Enabled
+
+```bash
+# macOS / Linux
+SAIFE_ENABLE_TRACING=true python main.py scan --target http://localhost:9001
+
+# Windows (cmd)
+set SAIFE_ENABLE_TRACING=true
+.venv\Scripts\python.exe main.py scan --target http://localhost:9001
+```
+
+Traces appear in Phoenix automatically as the scan runs — every agent call, prompt, response, tool use, and duration is captured as an OTEL span.
+
+### What You'll See in Phoenix
+
+| Span | Description |
+|------|-------------|
+| `scanner_agent` | Each attack prompt sent + vulnerability detected |
+| `analysis_agent` | Severity classification + OWASP mapping |
+| `knowledge_agent` | RAG retrieval from OWASP knowledge base |
+| `threat_intel_agent` | MITRE ATT&CK correlation |
+
+> **Phoenix endpoint default:** `http://127.0.0.1:6006`
+> Override with: `PHOENIX_ENDPOINT=http://your-host:6006`
 
 ---
 
