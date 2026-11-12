@@ -1,0 +1,28 @@
+# Personal notes — not for submission
+STUDY_GUIDE.md
+IMPLEMENTATION_PLAN.md
+VIDEO_SCRIPT.md
+COMMANDS.md
+
+# Claude Code workspace config
+.claude/
+
+# Python artifacts
+__pycache__/
+*.py[oc]
+*.egg-info/
+
+# Virtual environment
+.venv/
+
+# Runtime data
+*.db
+*.sqlite
+*.sqlite3
+chroma_db/
+
+# Environment variables
+.env
+
+# macOS
+.DS_Store

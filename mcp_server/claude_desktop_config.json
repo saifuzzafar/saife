@@ -1,0 +1,14 @@
+{
+  "_comment": "SAIFE MCP Server — Claude Desktop Configuration",
+  "_instructions": "Copy the 'mcpServers' block into your Claude Desktop config at: ~/Library/Application Support/Claude/claude_desktop_config.json",
+  "mcpServers": {
+    "saife": {
+      "command": "/Users/saifuzzafar/Desktop/project/AI/katas/katas-exercises/.venv/bin/python",
+      "args": ["-m", "mcp_server.server"],
+      "cwd": "/Users/saifuzzafar/Desktop/project/AI/katas/katas-exercises/capstone/saife",
+      "env": {
+        "OLLAMA_HOST": "http://localhost:11434"
+      }
+    }
+  }
+}
